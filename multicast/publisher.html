@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebRTC Publisher</title>
+  <link rel="stylesheet" type="text/css" href="/css/bootstrap.min.css">
+  <script src="../signalingchannel.js"></script>
+  <script>
+'use strict';
+
+var signalingChannel = new SignalingChannel('/pub');
+var stream = null;
+var peerConnections = {};
+
+signalingChannel.onopen = function() {
+  navigator.mediaDevices.getUserMedia({'audio': true, 'video': true}).then(function(strm) {
+    stream = strm;
+    document.querySelector('#local-video').src = window.URL.createObjectURL(stream);
+  }).catch(logError);
+}
+signalingChannel.onclose = function() {
+}
+
+function getConfiguration() {
+  var s = document.querySelector('#stun-turn-server').value;
+  return {
+    'iceServers': [
+      {
+        'urls': s
+      }
+    ]
+  };
+}
+
+signalingChannel.onmessage = function(e) {
+  var msg = JSON.parse(e.data);
+  var uuid = msg.uuid;
+  console.log('onmessage', msg);
+
+  if (msg.subscribe) {
+    console.log('msg.subscribe');
+    startSdp(uuid);
+  } else if (msg.desc) {
+    var desc = msg.desc;
+    console.log('msg.desc', desc);
+    if (desc.type == 'answer') {
+      peerConnections[uuid].setRemoteDescription(desc).catch(logError);
+    }
+  } else if (msg.candidate) {
+    console.log('msg.candidate');
+  }
+};
+
+function startSdp(uuid) {
+  var conf = getConfiguration();
+  var pc = new RTCPeerConnection(conf);
+
+  pc.onicecandidate = function(e) {
+    signalingChannel.send(JSON.stringify({ 'candidate': e.candidate, 'uuid': uuid }));
+  };
+  pc.onicecandidateerror = function(e) {
+    console.log('error', e);
+  };
+  pc.onnegotiationneeded = function() {
+    pc.createOffer().then(function(offer) {
+      return pc.setLocalDescription(offer);
+    }).then(function () {
+      signalingChannel.send(JSON.stringify({ 'desc': pc.localDescription, 'uuid': uuid }));
+    }).catch(logError);
+  };
+
+  pc.onconnectionstatechange = function (e) {
+    consoloe.log('onconnect connectionStateChange', e);
+  };
+
+  pc.oniceconnectionstatechange = function(e) {
+    console.log('iceConnectionStatechange', e.currentTarget.iceConnectionState, e);
+    if (e.currentTarget.iceConnectionState === 'failed') {
+      console.log('failed', uuid);
+
+      delete peerConnections[uuid];
+      uuid = undefined;
+    }
+  };
+
+  if (stream) {
+    pc.addStream(stream);
+  }
+
+  peerConnections[uuid] = pc;
+}
+
+function logError(e) {
+  console.log('error', e);
+}
+
+  </script>
+</head>
+<body>
+  <div class="container">
+    <ul style="list-style-type: none">
+      <li>
+        <video id="local-video" autoplay></video>
+      </li>
+      <li>
+        STUN/TURN Server <input type="text" value="stun:stun.l.google.com:19302" id="stun-turn-server" />
+      </li>
+    </ul>
+  </div>
+</body>
+</html>

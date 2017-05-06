@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebRTC Samples</title>
+  <script>
+'use strict';
+
+function getConfiguration() {
+  var s = document.querySelector('#stun-turn-server').value;
+  return {
+    'iceServers': [
+      {
+        'urls': s
+      }
+    ]
+  };
+}
+function startSdp() {
+  var conf = getConfiguration();
+  var pc = new RTCPeerConnection(conf);
+
+  pc.onicecandidate = function(e) {
+    var $result = document.querySelector('#result');
+    $result.value += '\n----- ICE -----\n';
+    $result.value += JSON.stringify(e.candidate);
+    console.log(e);
+  };
+  pc.onicecandidateerror = function(e) {
+    console.error(e);
+  };
+
+  pc.onnegotiationneeded = function() {
+    pc.createOffer().then(function(offer) {
+      var $result = document.querySelector('#result');
+      $result.value += '----- SDP -----\n';
+      $result.value += offer.sdp;
+      return pc.setLocalDescription(offer);
+    }).then(function () {
+      console.log(pc.localDescription);
+    }).catch(function(e) {
+      console.log('error', e);
+    });
+  };
+
+  var av = document.querySelector('input[name=conntype]').checked;
+  if (av) {
+    pc.ontrack = function(e) {
+      console.log(e);
+    };
+
+    navigator.mediaDevices.getUserMedia({'audio': true, 'video': true}).then(function(stream) {
+      if (pc.addTrack) {
+        pc.addTrack(stream.getAudioTracks()[0], stream);
+        pc.addTrack(stream.getVideoTracks()[0], stream);
+      } else {
+        pc.addStream(stream);
+      }
+    }).catch(function(e) {
+      console.log('error', e);
+    });
+  } else {
+    var channel = pc.createDataChannel('chat');
+  }
+}
+  </script>
+</head>
+<body>
+  <p>Obtain SDP and candidates of ICE.</p>
+  <ul style="list-style-type: none">
+    <li>
+      STUN/TURN Server <input type="text" value="stun:stun.l.google.com:19302" id="stun-turn-server" />
+    </li>
+    <li>
+      <label><input type="radio" name="conntype" checked />Audio/Video</label>
+      <label><input type="radio" name="conntype" />Data</label>
+    </li>
+    <li>
+      <button onclick="startSdp();">Get SDP</button>
+    </li>
+    <li>
+      <textarea rows="10" cols="80" id="result"></textarea>
+    </li>
+  </ul>
+</body>
+</html>

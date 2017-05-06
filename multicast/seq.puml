@@ -1,0 +1,20 @@
+@startuml
+participant publisher as pub
+participant subscriber as sub
+
+sub -> server : subscribe: 1
+server -> pub : subscribe: 1, uuid: 'uuid'
+
+pub -> pub : creatOffer
+pub -> server : desc: { type: offer}, uuid: 'uuid'
+server -> server : delete uuid from message
+server -> sub : desc: {type: offer}
+sub -> sub : createAnswer
+sub -> server : desc: {type: answer}
+server -> pub : desc: {type: answer}, uuid: 'uuid'
+
+...
+
+server -> pub : disconnect
+pub -> pub : remove the peer connection
+@enduml
