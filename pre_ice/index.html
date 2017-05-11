@@ -8,13 +8,13 @@
 
 function getConfiguration() {
   var s = document.querySelector('#stun-turn-server').value;
-  return {
+  return s ? {
     'iceServers': [
       {
         'urls': s
       }
     ]
-  };
+  } : null;
 }
 function startSdp() {
   var conf = getConfiguration();
